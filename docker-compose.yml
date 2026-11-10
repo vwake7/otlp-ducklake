@@ -1,0 +1,105 @@
+services:
+  quack:
+    build:
+      context: .
+      dockerfile: quack/Dockerfile
+    env_file: .env
+    volumes:
+      - ./data/catalog:/data
+    ports:
+      - "9494:9494"
+      - "8080:8080"
+      - "8081:8081"
+      - "8082:8082"
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/quack-ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  logs:
+    build: .
+    command: ["logs"]
+    network_mode: service:quack
+    env_file: .env
+    environment:
+      QUACK_HOST: 127.0.0.1
+      LOGS_WRITER_ID: logs
+      LOGS_QUEUE_DIR: /var/lib/ducklake/logs-queue
+      LOGS_ADDR: ":8080"
+    volumes:
+      - ./data/logs-queue:/var/lib/ducklake/logs-queue
+    depends_on:
+      quack:
+        condition: service_healthy
+
+  metrics:
+    build: .
+    command: ["metrics"]
+    network_mode: service:quack
+    env_file: .env
+    environment:
+      QUACK_HOST: 127.0.0.1
+      METRICS_WRITER_ID: metrics
+      METRICS_QUEUE_DIR: /var/lib/ducklake/metrics-queue
+      METRICS_ADDR: ":8082"
+    volumes:
+      - ./data/metrics-queue:/var/lib/ducklake/metrics-queue
+    depends_on:
+      quack:
+        condition: service_healthy
+
+  maintenance:
+    build: .
+    command: ["maintenance"]
+    network_mode: service:quack
+    env_file: .env
+    environment:
+      QUACK_HOST: 127.0.0.1
+    depends_on:
+      quack:
+        condition: service_healthy
+
+  query:
+    build: .
+    command: ["query"]
+    network_mode: service:quack
+    env_file: .env
+    environment:
+      QUACK_HOST: 127.0.0.1
+      QUERY_ADDR: ":8081"
+    depends_on:
+      quack:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:11.6.11
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: yesoreyeram-infinity-datasource
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+    depends_on:
+      query:
+        condition: service_started
+
+  loadgen:
+    profiles: ["load"]
+    build:
+      context: .
+      dockerfile: loadgen/Dockerfile
+    network_mode: service:quack
+    environment:
+      INGEST_URL: http://127.0.0.1:8080/v1/logs
+      LOAD_RATE: "10000"
+      LOAD_BATCH: "1000"
+      LOAD_WORKERS: "4"
+    depends_on:
+      logs:
+        condition: service_started

@@ -1,0 +1,91 @@
+{
+  "uid": "ducklake",
+  "title": "DuckLake",
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "refresh": "10s",
+  "time": { "from": "now-15m", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "metric_name",
+        "label": "metric",
+        "type": "custom",
+        "query": "ducklake.writer.accepted_rows,ducklake.writer.inserted_rows,ducklake.writer.queue_bytes,ducklake.writer.queue_oldest_age_seconds,ducklake.writer.flush_duration_seconds,ducklake.writer.commit_failures",
+        "current": {
+          "text": "ducklake.writer.accepted_rows",
+          "value": "ducklake.writer.accepted_rows"
+        },
+        "options": [
+          { "text": "ducklake.writer.accepted_rows", "value": "ducklake.writer.accepted_rows", "selected": true },
+          { "text": "ducklake.writer.inserted_rows", "value": "ducklake.writer.inserted_rows", "selected": false },
+          { "text": "ducklake.writer.queue_bytes", "value": "ducklake.writer.queue_bytes", "selected": false },
+          { "text": "ducklake.writer.queue_oldest_age_seconds", "value": "ducklake.writer.queue_oldest_age_seconds", "selected": false },
+          { "text": "ducklake.writer.flush_duration_seconds", "value": "ducklake.writer.flush_duration_seconds", "selected": false },
+          { "text": "ducklake.writer.commit_failures", "value": "ducklake.writer.commit_failures", "selected": false }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Logs - Telemetry",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "ducklake" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "ducklake" },
+          "type": "json",
+          "source": "url",
+          "format": "timeseries",
+          "parser": "backend",
+          "url": "http://quack:8081/query",
+          "url_options": {
+            "method": "POST",
+            "body_type": "raw",
+            "body_content_type": "application/json",
+            "data": "{\"sql\":\"WITH samples AS (SELECT timestamp, value FROM metrics WHERE metric_name = '${metric_name}' AND resource['service.name'] = 'logs' AND timestamp >= to_timestamp(${__from} / 1000.0) - INTERVAL 30 SECONDS AND timestamp <= to_timestamp(${__to} / 1000.0)), deltas AS (SELECT timestamp, value, value - LAG(value, 1, value) OVER (ORDER BY timestamp) AS delta_value FROM samples) SELECT timestamp, CASE WHEN '${metric_name}' NOT IN ('ducklake.writer.accepted_rows', 'ducklake.writer.inserted_rows', 'ducklake.writer.commit_failures') THEN value ELSE delta_value END AS value FROM deltas WHERE timestamp >= to_timestamp(${__from} / 1000.0) AND ('${metric_name}' NOT IN ('ducklake.writer.accepted_rows', 'ducklake.writer.inserted_rows', 'ducklake.writer.commit_failures') OR delta_value >= 0)\"}"
+          },
+          "root_selector": "",
+          "columns": [
+            { "selector": "timestamp", "text": "Time", "type": "timestamp" },
+            { "selector": "value", "text": "value", "type": "number" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Logs",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 8 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "ducklake" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "ducklake" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "http://quack:8081/query",
+          "url_options": {
+            "method": "POST",
+            "body_type": "raw",
+            "body_content_type": "application/json",
+            "data": "{\"sql\":\"SELECT timestamp, severity_text, body FROM logs WHERE timestamp >= to_timestamp(${__from} / 1000.0) AND timestamp <= to_timestamp(${__to} / 1000.0) ORDER BY timestamp DESC\"}"
+          },
+          "root_selector": "",
+          "columns": [
+            { "selector": "timestamp", "text": "timestamp", "type": "timestamp" },
+            { "selector": "severity_text", "text": "severity_text", "type": "string" },
+            { "selector": "body", "text": "body", "type": "string" }
+          ]
+        }
+      ]
+    }
+  ]
+}

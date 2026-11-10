@@ -1,0 +1,11 @@
+apiVersion: 1
+
+datasources:
+  - name: DuckLake
+    uid: ducklake
+    type: yesoreyeram-infinity-datasource
+    access: proxy
+    isDefault: true
+    editable: true
+    jsonData:
+      timeoutInSeconds: 15
